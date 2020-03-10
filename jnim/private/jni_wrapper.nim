@@ -509,6 +509,8 @@ proc linkWithJVMLib* =
       let foundJVM = findJVM()
       if foundJVM.isSome:
         handle = loadLib(foundJVM.get.lib)
+        if handle.isNil:
+          raiseOSError(osLastError(), "JVM could not be loaded")
         linkWithJVMModule(handle)
 
     if not isJVMLoaded():

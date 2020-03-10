@@ -18,6 +18,7 @@ var theEnv* {.threadVar}: JNIEnvPtr
 var findClassOverride* {.threadVar.}: proc(env: JNIEnvPtr, name: cstring): JClass
 
 proc initJNIThread* {.gcsafe.}
+proc findRunningVM()
 
 proc initJNIArgs(version: JNIVersion = JNIVersion.v1_6, options: openarray[string] = []) =
   ## Setup JNI API
@@ -33,8 +34,11 @@ proc initJNIArgs(version: JNIVersion = JNIVersion.v1_6, options: openarray[strin
       if options[i].len != 0:
         copyMem(addr opts[i].optionString[0], unsafeAddr options[i][0], options[i].len + 1)
 
-proc initJNI*(version: JNIVersion = JNIVersion.v1_6, options: openarray[string] = []) =
+proc initJNI*(version: JNIVersion = JNIVersion.v1_6, options: openarray[string] = [], existingVM: JavaVMPtr = nil) =
   ## Setup JNI API
+  if not existingVM.isNil:
+    theVM = existingVM
+    findRunningVM()
   initJNIArgs(version, options)
   initJNIThread()
 
@@ -53,8 +57,9 @@ when false:
 
 proc initJNIThread* =
   ## Setup JNI API thread
-  if theEnv != nil:
-    return
+  when compileOption("threads"):
+    if theEnv != nil:
+      return
   if initArgs.version == 0:
     raise newJNIException("You must initialize JNI API before using it")
 
@@ -98,13 +103,13 @@ proc findRunningVM() =
       raise newJNIException("No JVM found")
 
 template checkInit* =
-  if theEnv.isNil: findRunningVM()
+  findRunningVM()
 
 template deleteLocalRef*(env: JNIEnvPtr, r: jobject) =
   env.DeleteLocalRef(env, r)
 
 template deleteGlobalRef*(env: JNIEnvPtr, r: jobject) =
-  env.DeleteGlobalRef(env, r)
+  env.DeleteGlobalRef(env, r) # this is causing crash?
 
 template newGlobalRef*[T : jobject](env: JNIEnvPtr, r: T): T =
   cast[T](theEnv.NewGlobalRef(theEnv, r))
